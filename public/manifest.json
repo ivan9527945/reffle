@@ -1,0 +1,23 @@
+{
+  "name": "BTC Raffle — 比特幣區塊公平抽獎",
+  "short_name": "BTC Raffle",
+  "description": "利用比特幣區塊雜湊值進行可公開驗證的公平抽獎",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#f7931a",
+  "lang": "zh-TW",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
