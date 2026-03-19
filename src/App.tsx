@@ -4,13 +4,14 @@ import { SetupView } from './components/SetupView'
 import { WaitingView } from './components/WaitingView'
 import { ResultView } from './components/ResultView'
 import { Toast } from './components/Toast'
+import { CryptoBackground } from './components/CryptoBackground'
 import { useRaffle } from './hooks/useRaffle'
 import { useCurrentHeight } from './hooks/useBitcoin'
 import './styles/globals.scss'
 
 export default function App() {
   const { view, raffle, lockRaffle, revealResult, reset } = useRaffle()
-  const { height, poll } = useCurrentHeight(60_000)
+  const { height, poll } = useCurrentHeight()
 
   const handleHeightRefresh = useCallback(async () => {
     return poll()
@@ -18,9 +19,12 @@ export default function App() {
 
   return (
     <>
+      <CryptoBackground />
+
+      <div style={{ position: 'relative', zIndex: 1 }}>
       <Header view={view} currentHeight={height} onReset={reset} />
 
-      <main className="container py-10">
+      <main className="container px-4 py-6 sm:px-8 sm:py-10">
         {view === 'setup' && (
           <SetupView
             onLock={lockRaffle}
@@ -43,6 +47,7 @@ export default function App() {
       </main>
 
       <Toast />
+      </div>
     </>
   )
 }

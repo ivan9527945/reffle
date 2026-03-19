@@ -88,7 +88,7 @@ export function WaitingView({ raffle, onMined, onHeightUpdate }: WaitingViewProp
                   <path d="M21 12a9 9 0 11-6.219-8.56"/>
                 </svg>
               </span>
-              每 30 秒自動更新
+              WebSocket 即時更新
             </div>
           </CardContent>
         </Card>
@@ -115,11 +115,30 @@ export function WaitingView({ raffle, onMined, onHeightUpdate }: WaitingViewProp
       {/* Verify formula */}
       <Card>
         <CardHeader>
-          <CardTitle>驗算公式</CardTitle>
+          <CardTitle>📐 開獎計算公式</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="code-block text-muted-foreground">
-            {`得獎者 = participants[ BigInt("0x" + blockHash) % BigInt(${raffle.participants.length}) ]\n→ 在 mempool.space 查詢區塊 #${raffle.targetBlock} 的 hash，自行代入驗算`}
+          <div className="code-block text-sm space-y-1.5 mb-3">
+            <div className="text-muted-foreground text-xs mb-2">出礦後，任何人都可以用以下步驟自行驗算：</div>
+            <div>
+              <span className="text-btc">① 取得 hash</span>
+              {'  '}→ 至 <span className="mono">mempool.space</span> 查詢區塊 <span className="mono text-btc">#{raffle.targetBlock?.toLocaleString()}</span> 的 Block Hash
+            </div>
+            <div>
+              <span className="text-btc">② 轉為數字</span>
+              {'  '}→ <span className="mono">BigInt("0x" + blockHash)</span>
+            </div>
+            <div>
+              <span className="text-btc">③ 取餘數</span>
+              {'   '}→ <span className="mono">% BigInt(<span className="text-btc">{raffle.participants.length}</span>)</span>{' '}← 得到索引 0 ～ {raffle.participants.length - 1}
+            </div>
+            <div>
+              <span className="text-btc">④ 對應得獎者</span>
+              {' '}→ <span className="mono">participants[索引]</span>{' '}← 名單第 1 位索引為 0
+            </div>
+          </div>
+          <div className="code-block mono text-xs text-muted-foreground">
+            {`得獎者 = participants[ BigInt("0x" + blockHash) % BigInt(${raffle.participants.length}) ]`}
           </div>
         </CardContent>
       </Card>

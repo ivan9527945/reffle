@@ -72,7 +72,7 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
   const suggestBlock = async () => {
     const h = await onHeightRefresh()
     if (!h) { show('無法連線到比特幣網路'); return }
-    const suggested = String(h + 2)
+    const suggested = String(h + 1)
     setTargetBlock(suggested)
     updateETA(suggested, h)
   }
@@ -105,15 +105,14 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
         <h1 className="text-3xl sm:text-4xl font-black mb-3">
           公平抽獎，<span className="text-btc">由比特幣決定</span>
         </h1>
-        <p className="text-muted-foreground mx-auto max-w-lg leading-relaxed text-[15px]">
-          指定未來一個比特幣區塊，當礦工出礦時，用區塊 hash 決定得獎者。
-          結果完全公開、可驗證，任何人都能自行計算確認。
+        <p className="text-muted-foreground mx-auto leading-relaxed text-[15px] whitespace-nowrap overflow-hidden text-ellipsis">
+          指定未來一個比特幣區塊，當礦工出礦時，用區塊 hash 決定得獎者。結果完全公開、可驗證，任何人都能自行計算確認。
         </p>
       </div>
 
       {/* How it works */}
       <div className="flex flex-wrap gap-3 justify-center mb-10">
-        {['📝 輸入參與名單', '⛏️ 指定開獎區塊', '🔗 等待出礦', '🏆 Hash 決定贏家'].map((s, i, arr) => (
+        {['📝 輸入參與名單', '🔗 等待出礦', '🏆 Hash 決定贏家'].map((s, i, arr) => (
           <div key={s} className="flex items-center gap-3">
             <Badge>{s}</Badge>
             {i < arr.length - 1 && <span className="text-muted-foreground text-sm">→</span>}
@@ -193,15 +192,15 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
           {/* Target block */}
           <div>
             <label className="label-caps block mb-2">開獎區塊高度</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 type="number"
-                className="mono flex-1"
+                className="mono flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={targetBlock}
                 onChange={e => handleBlockInput(e.target.value)}
                 placeholder="輸入區塊高度..."
               />
-              <Button variant="outline" onClick={suggestBlock} className="shrink-0">
+              <Button variant="outline" onClick={suggestBlock} className="shrink-0 sm:w-auto w-full">
                 推薦下一個 ⚡
               </Button>
             </div>
@@ -236,7 +235,7 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
           <CardTitle>⚙️ 為什麼這樣設計是公平的？</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid sm:grid-cols-3 gap-5">
+          <div className="grid sm:grid-cols-3 gap-5 mb-6">
             {[
               {
                 icon: '🎲',
@@ -259,6 +258,18 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
                 <div className="text-muted-foreground text-[13px] leading-relaxed">{item.body}</div>
               </div>
             ))}
+          </div>
+
+          {/* Formula */}
+          <div className="border-t pt-5">
+            <p className="label-caps mb-3">📐 開獎計算公式</p>
+            <div className="code-block text-sm space-y-1.5">
+              <div className="text-muted-foreground text-xs mb-2">出礦後，任何人都可以用以下公式自行驗算：</div>
+              <div><span className="text-btc">① 取得 hash</span>  → 至 mempool.space 查詢指定區塊的 Block Hash</div>
+              <div><span className="text-btc">② 轉為數字</span>  → <span className="mono">BigInt("0x" + blockHash)</span></div>
+              <div><span className="text-btc">③ 取餘數</span>   → <span className="mono">% BigInt(人數)</span>{' '}← 得到名單索引 (0-based)</div>
+              <div><span className="text-btc">④ 對應得獎者</span> → <span className="mono">participants[索引]</span></div>
+            </div>
           </div>
         </CardContent>
       </Card>

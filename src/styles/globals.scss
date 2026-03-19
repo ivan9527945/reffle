@@ -42,12 +42,6 @@ body {
   color: hsl(var(--foreground));
   min-height: 100vh;
   overflow-x: hidden;
-
-  // Subtle grid pattern
-  background-image:
-    linear-gradient(hsl(var(--border)) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px);
-  background-size: 40px 40px;
 }
 
 // ─────────────────────────────────────────
@@ -104,7 +98,7 @@ body {
 .container {
   max-width: 860px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 1.5rem;
 }
 
 // ─────────────────────────────────────────

@@ -57,17 +57,23 @@ export function Header({ view, currentHeight, onReset }: HeaderProps) {
 
         <StepNav view={view} />
 
-        <div className="flex items-center gap-3">
-          <div className="header__live">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="header__live hidden sm:flex">
             <div className="header__live-dot" />
             <span className="mono">
               {currentHeight ? `BTC #${currentHeight.toLocaleString()}` : 'BTC # —'}
             </span>
           </div>
+          <div className="header__live flex sm:hidden">
+            <div className="header__live-dot" />
+            <span className="mono text-xs">
+              {currentHeight ? `#${currentHeight.toLocaleString()}` : '# —'}
+            </span>
+          </div>
           <button
             onClick={onReset}
             title="清除資料"
-            className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/10"
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/10 whitespace-nowrap"
           >
             重新開始
           </button>
