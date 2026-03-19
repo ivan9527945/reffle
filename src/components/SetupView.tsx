@@ -72,7 +72,7 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
   const suggestBlock = async () => {
     const h = await onHeightRefresh()
     if (!h) { show('無法連線到比特幣網路'); return }
-    const suggested = String(h + 6)
+    const suggested = String(h + 2)
     setTargetBlock(suggested)
     updateETA(suggested, h)
   }
