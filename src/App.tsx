@@ -18,7 +18,7 @@ export default function App() {
 
   return (
     <>
-      <Header view={view} currentHeight={height} />
+      <Header view={view} currentHeight={height} onReset={reset} />
 
       <main className="container py-10">
         {view === 'setup' && (

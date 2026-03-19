@@ -40,9 +40,10 @@ function StepNav({ view }: StepNavProps) {
 interface HeaderProps {
   view: View
   currentHeight: number | null
+  onReset: () => void
 }
 
-export function Header({ view, currentHeight }: HeaderProps) {
+export function Header({ view, currentHeight, onReset }: HeaderProps) {
   return (
     <header className="header">
       <div className="header__inner">
@@ -56,11 +57,20 @@ export function Header({ view, currentHeight }: HeaderProps) {
 
         <StepNav view={view} />
 
-        <div className="header__live">
-          <div className="header__live-dot" />
-          <span className="mono">
-            {currentHeight ? `BTC #${currentHeight.toLocaleString()}` : 'BTC # —'}
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="header__live">
+            <div className="header__live-dot" />
+            <span className="mono">
+              {currentHeight ? `BTC #${currentHeight.toLocaleString()}` : 'BTC # —'}
+            </span>
+          </div>
+          <button
+            onClick={onReset}
+            title="清除資料"
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/10"
+          >
+            重新開始
+          </button>
         </div>
       </div>
     </header>
