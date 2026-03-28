@@ -18,10 +18,9 @@ export default function App() {
   }, [poll])
 
   return (
-    <>
+    <div style={{ position: 'relative', zIndex: 1 }}>
       <CryptoBackground />
 
-      <div style={{ position: 'relative', zIndex: 1 }}>
       <Header view={view} currentHeight={height} onReset={reset} />
 
       <main className="container px-4 py-6 sm:px-8 sm:py-10">
@@ -47,7 +46,6 @@ export default function App() {
       </main>
 
       <Toast />
-      </div>
-    </>
+    </div>
   )
 }

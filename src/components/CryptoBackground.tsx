@@ -1,486 +1,278 @@
 import { useEffect, useRef } from 'react'
+import * as THREE from 'three'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 
-const BTC = '#f7931a'
-const HEX_CHARS = '0123456789abcdef'
-function randHex(n: number) {
-  return Array.from({ length: n }, () => HEX_CHARS[Math.floor(Math.random() * 16)]).join('')
-}
-function rand(a: number, b: number) { return a + Math.random() * (b - a) }
-function lerp(a: number, b: number, t: number) { return a + (b - a) * t }
-
-// ─── Isometric helpers ────────────────────────────────────────────────────────
-const TW = 110
-const TH = TW * 0.5 * 0.5
-const DEPTH = 36
-
-function iso(col: number, row: number, z: number = 0): [number, number] {
-  const sx = (col - row) * (TW / 2)
-  const sy = (col + row) * TH - z * DEPTH
-  return [sx, sy]
-}
-
-// ─── Draw one isometric cube ──────────────────────────────────────────────────
-function drawCube(
-  ctx: CanvasRenderingContext2D,
-  col: number, row: number,
-  ox: number, oy: number,
-  label: string, sub: string,
-  flash: number,
-  alpha: number,
-  ts: number,
-  fillPct: number = 0.75,
-  isPending: boolean = false,
-) {
-  const [cx, cy] = iso(col, row, 1)
-  const x = cx + ox
-  const y = cy + oy
-  const hw = TW / 2
-  const flashA = flash * 0.8
-  const pulse = Math.sin(ts * 0.004) * 0.5 + 0.5
-
-  ctx.save()
-  ctx.globalAlpha = alpha
-
-  // ── Top face ──────────────────────────────────────────────
-  ctx.beginPath()
-  ctx.moveTo(x,      y - TH * 2)
-  ctx.lineTo(x + hw, y - TH)
-  ctx.lineTo(x,      y)
-  ctx.lineTo(x - hw, y - TH)
-  ctx.closePath()
-
-  if (isPending) {
-    ctx.fillStyle = `rgba(35,22,5,0.45)`
-    ctx.fill()
-    ctx.strokeStyle = `rgba(247,147,26,${0.2 + pulse * 0.25})`
-    ctx.lineWidth = 1.0
-    ctx.setLineDash([3, 5])
-    ctx.stroke()
-    ctx.setLineDash([])
-  } else {
-    ctx.fillStyle = `rgba(35,22,5,${0.92 + flashA * 0.08})`
-    ctx.fill()
-
-    // Block fullness gradient on top face
-    if (fillPct > 0) {
-      ctx.save()
-      ctx.beginPath()
-      ctx.moveTo(x, y - TH * 2)
-      ctx.lineTo(x + hw, y - TH)
-      ctx.lineTo(x, y)
-      ctx.lineTo(x - hw, y - TH)
-      ctx.closePath()
-      ctx.clip()
-      const g = ctx.createLinearGradient(x, y, x, y - TH * 2)
-      g.addColorStop(0,       `rgba(247,147,26,${0.10 * fillPct})`)
-      g.addColorStop(fillPct, `rgba(247,147,26,${0.06 * fillPct})`)
-      g.addColorStop(fillPct, `rgba(247,147,26,0)`)
-      g.addColorStop(1,       `rgba(247,147,26,0)`)
-      ctx.fillStyle = g
-      ctx.fill()
-      ctx.restore()
-    }
-
-    ctx.strokeStyle = `rgba(247,147,26,${0.55 + flashA * 0.45})`
-    ctx.lineWidth = flash > 0 ? 1.5 : 0.8
-    if (flash > 0) { ctx.shadowColor = BTC; ctx.shadowBlur = 14 * flash }
-    ctx.stroke()
-    ctx.shadowBlur = 0
-  }
-
-  // ── Left face ─────────────────────────────────────────────
-  ctx.beginPath()
-  ctx.moveTo(x - hw, y - TH)
-  ctx.lineTo(x,      y)
-  ctx.lineTo(x,      y + DEPTH)
-  ctx.lineTo(x - hw, y - TH + DEPTH)
-  ctx.closePath()
-  ctx.fillStyle = isPending ? `rgba(20,12,2,0.35)` : `rgba(20,12,2,0.95)`
-  ctx.fill()
-  if (!isPending) {
-    ctx.strokeStyle = `rgba(247,147,26,${0.2 + flashA * 0.3})`
-    ctx.lineWidth = 0.6
-    ctx.stroke()
-  }
-
-  // ── Right face ────────────────────────────────────────────
-  ctx.beginPath()
-  ctx.moveTo(x,      y)
-  ctx.lineTo(x + hw, y - TH)
-  ctx.lineTo(x + hw, y - TH + DEPTH)
-  ctx.lineTo(x,      y + DEPTH)
-  ctx.closePath()
-  ctx.fillStyle = isPending ? `rgba(28,16,3,0.35)` : `rgba(28,16,3,0.95)`
-  ctx.fill()
-  if (!isPending) {
-    ctx.strokeStyle = `rgba(247,147,26,${0.2 + flashA * 0.3})`
-    ctx.stroke()
-  }
-
-  // ── Text labels ───────────────────────────────────────────
-  if (isPending) {
-    ctx.save()
-    ctx.translate(x - 2, y - TH - 2)
-    ctx.transform(1, -0.28, 0.5, 0.5, 0, 0)
-    ctx.font = `7px 'JetBrains Mono', monospace`
-    ctx.fillStyle = `rgba(247,147,26,${0.25 + pulse * 0.25})`
-    ctx.fillText('mining...', 0, 0)
-    ctx.restore()
-  } else {
-    ctx.save()
-    ctx.translate(x - 2, y - TH - 2)
-    ctx.transform(1, -0.28, 0.5, 0.5, 0, 0)
-    ctx.font = `bold 9px 'JetBrains Mono', monospace`
-    ctx.fillStyle = flash > 0 ? BTC : `rgba(247,147,26,0.85)`
-    ctx.fillText(label, 0, 0)
-    ctx.font = `7px 'JetBrains Mono', monospace`
-    ctx.fillStyle = `rgba(247,147,26,0.45)`
-    ctx.fillText(sub, 0, 10)
-    ctx.restore()
-
-    // ₿ on right face
-    ctx.translate(x + hw - 12, y - TH / 2 + DEPTH / 2 - 4)
-    ctx.font = `bold 11px sans-serif`
-    ctx.fillStyle = flash > 0 ? BTC : `rgba(247,147,26,0.3)`
-    ctx.fillText('₿', 0, 0)
-  }
-
-  ctx.restore()
-}
-
-// ─── Connector line ───────────────────────────────────────────────────────────
-function drawLink(
-  ctx: CanvasRenderingContext2D,
-  c1: number, r1: number,
-  c2: number, r2: number,
-  ox: number, oy: number,
-  alpha: number,
-  ts: number,
-  animated = false,
-) {
-  const [x1, y1] = iso(c1, r1, 0)
-  const [x2, y2] = iso(c2, r2, 0)
-  ctx.strokeStyle = `rgba(247,147,26,${alpha})`
-  ctx.lineWidth = animated ? 1.1 : 0.8
-  ctx.setLineDash([4, 6])
-  ctx.lineDashOffset = animated ? -(ts * 0.025) % 10 : 0
-  ctx.beginPath()
-  ctx.moveTo(x1 + ox, y1 + oy)
-  ctx.lineTo(x2 + ox, y2 + oy)
-  ctx.stroke()
-  ctx.setLineDash([])
-  ctx.lineDashOffset = 0
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface IsoBlock {
-  col: number
-  height: number
-  hash: string
-  birth: number
-  dropZ: number
-  fillPct: number
-  txCount: number
-}
-
-interface Particle {
-  x: number; y: number
-  vx: number; vy: number
-  life: number
-}
-
-
-interface Wave {
-  x: number; y: number
-  r: number; maxR: number
-  alpha: number
-}
-
-interface NetNode {
-  x: number; y: number
-  pulsePhase: number
-  connections: number[]
-}
-
-interface RainDrop {
-  x: number; y: number
-  speed: number
-  chars: string[]
-  alpha: number
-  len: number
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
 export function CryptoBackground() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const mountRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const canvas = canvasRef.current!
-    const ctx = canvas.getContext('2d')!
+    const container = mountRef.current!
+    const count = 20000
 
-    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
-    resize()
-    window.addEventListener('resize', resize)
+    // ── SETUP ──────────────────────────────────────────────────────────────────
+    const scene = new THREE.Scene()
+    scene.fog = new THREE.FogExp2(0x000000, 0.01)
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000)
+    camera.position.set(0, 0, 100)
 
-    const ox = () => canvas.width / 2
-    const oy = () => canvas.height * 0.62
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    renderer.domElement.style.display = 'block'
+    renderer.domElement.style.width   = '100%'
+    renderer.domElement.style.height  = '100%'
+    container.appendChild(renderer.domElement)
 
-    let baseH = 880000 + Math.floor(Math.random() * 5000)
-    let blocks: IsoBlock[] = []
-    let particles: Particle[] = []
-    let waves: Wave[] = []
-    let lastSpawn = -9999
+    // ── POST PROCESSING ────────────────────────────────────────────────────────
+    const composer = new EffectComposer(renderer)
+    composer.addPass(new RenderPass(scene, camera))
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85,
+    )
+    bloomPass.strength  = 1.8
+    bloomPass.radius    = 0.4
+    bloomPass.threshold = 0
+    composer.addPass(bloomPass)
 
-    // ── Seed initial blocks ──────────────────────────────────────────────────
-    const visibleCols = Math.ceil(canvas.width / (TW / 2)) + 4
-    for (let i = 0; i < visibleCols; i++) {
-      blocks.push({
-        col: -Math.floor(visibleCols / 2) + i,
-        height: baseH + i,
-        hash: randHex(64),
-        birth: -9999,
-        dropZ: 0,
-        fillPct: rand(0.5, 0.98),
-        txCount: Math.floor(rand(800, 4500)),
-      })
+    // ── OBJECTS ────────────────────────────────────────────────────────────────
+    const dummy  = new THREE.Object3D()
+    const pColor = new THREE.Color()
+    const target = new THREE.Vector3()
+
+    const geometry = new THREE.TetrahedronGeometry(0.25)
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff })
+
+    const mesh = new THREE.InstancedMesh(geometry, material, count)
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    scene.add(mesh)
+
+    const initColor = new THREE.Color()
+    const positions: THREE.Vector3[] = []
+    for (let i = 0; i < count; i++) {
+      positions.push(new THREE.Vector3(
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 100,
+      ))
+      mesh.setColorAt(i, initColor.setHex(0x00ff88))
     }
 
-    // ── Background hash rain ─────────────────────────────────────────────────
-    const rainDrops: RainDrop[] = []
-    const RAIN_SPACING = 7  // px between columns — smaller = denser
-    const initRain = () => {
-      rainDrops.length = 0
-      const cols = Math.floor(canvas.width / RAIN_SPACING) + 2
-      for (let i = 0; i < cols; i++) {
-        const len = Math.floor(rand(14, 40))
-        rainDrops.push({
-          x: i * RAIN_SPACING + RAIN_SPACING / 2,
-          y: rand(-canvas.height * 1.5, 0),
-          speed: rand(0.6, 2.8),
-          chars: Array.from({ length: len }, () => HEX_CHARS[Math.floor(Math.random() * 16)]),
-          alpha: rand(0.10, 0.32),
-          len,
-        })
-      }
-    }
-    initRain()
+    const clock = new THREE.Clock()
 
-    // ── Background P2P network nodes ─────────────────────────────────────────
-    const netNodes: NetNode[] = []
-    const nodeCount = 18
-    for (let i = 0; i < nodeCount; i++) {
-      netNodes.push({
-        x: rand(0, canvas.width),
-        y: rand(0, canvas.height),
-        pulsePhase: rand(0, Math.PI * 2),
-        connections: [],
-      })
+    // ── API STUBS ──────────────────────────────────────────────────────────────
+    const PARAMS: Record<string, number> = {
+      signalSpeed:   1.8,
+      fireIntensity: 0.72,
+      brainSize:     44,
+      circuitDense:  3.5,
+      coreGlow:      0.65,
     }
-    for (let i = 0; i < nodeCount; i++) {
-      for (let j = i + 1; j < nodeCount; j++) {
-        const dx = netNodes[i].x - netNodes[j].x
-        const dy = netNodes[i].y - netNodes[j].y
-        if (Math.sqrt(dx * dx + dy * dy) < canvas.width * 0.28) {
-          netNodes[i].connections.push(j)
-        }
-      }
-    }
+    const addControl = (id: string, _l: string, _min: number, _max: number, val: number): number =>
+      id in PARAMS ? PARAMS[id] : val
+    const setInfo  = (_t: string, _d: string) => {}
+    const annotate = (_id: string, _pos: THREE.Vector3, _label: string) => {}
 
-    const spawnParticles = (sx: number, sy: number) => {
-      for (let i = 0; i < 22; i++) {
-        const a = Math.random() * Math.PI * 2
-        const s = rand(0.4, 3.5)
-        particles.push({ x: sx, y: sy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1 })
-      }
-    }
-
-    let camCol = 0
+    // ── ANIMATION ──────────────────────────────────────────────────────────────
     let animId: number
 
-    const draw = (ts: number) => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const animate = () => {
+      animId = requestAnimationFrame(animate)
+      const time = clock.getElapsedTime()
 
-      // ── 1. P2P network nodes (background) ───────────────────────────────────
-      for (let i = 0; i < netNodes.length; i++) {
-        const n = netNodes[i]
-        const pulse = Math.sin(ts * 0.0009 + n.pulsePhase) * 0.5 + 0.5
-        for (const j of n.connections) {
-          const n2 = netNodes[j]
-          ctx.strokeStyle = `rgba(247,147,26,${0.025 + pulse * 0.015})`
-          ctx.lineWidth = 0.5
-          ctx.beginPath()
-          ctx.moveTo(n.x, n.y)
-          ctx.lineTo(n2.x, n2.y)
-          ctx.stroke()
-        }
-        ctx.globalAlpha = 0.12 + pulse * 0.1
-        ctx.fillStyle = BTC
-        ctx.shadowColor = BTC
-        ctx.shadowBlur = 5 * pulse
-        ctx.beginPath()
-        ctx.arc(n.x, n.y, 2 + pulse * 1.5, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.shadowBlur = 0
-        ctx.globalAlpha = 1
-      }
+      // Read controls once — values are static per frame
+      const signalSpeed   = addControl('signalSpeed',   'Signal Speed',    0.1, 5.0, 1.8)
+      const fireIntensity = addControl('fireIntensity', 'Fire Intensity',  0.0, 1.0, 0.72)
+      const brainSize     = addControl('brainSize',     'Brain Size',      25,  75,  44)
+      const coreGlow      = addControl('coreGlow',      'Core Glow',       0.0, 1.0, 0.65)
+      const t = time * signalSpeed
 
-      // ── 2. Hash rain ─────────────────────────────────────────────────────────
-      ctx.font = `13px 'JetBrains Mono', monospace`
-      for (const drop of rainDrops) {
-        drop.y += drop.speed
-        if (drop.y > canvas.height + drop.len * 15) {
-          drop.y = rand(-canvas.height * 0.5, -20)
-          drop.len = Math.floor(rand(14, 40))
-          drop.speed = rand(0.6, 2.8)
-          drop.alpha = rand(0.10, 0.32)
-          drop.chars = Array.from({ length: drop.len }, () => HEX_CHARS[Math.floor(Math.random() * 16)])
-        }
-        if (Math.random() < 0.04) {
-          drop.chars[Math.floor(Math.random() * drop.chars.length)] = HEX_CHARS[Math.floor(Math.random() * 16)]
-        }
-        for (let i = 0; i < drop.chars.length; i++) {
-          const yy = drop.y - i * 15
-          if (yy < 0 || yy > canvas.height) continue
-          const headBoost = i === 0 ? 2.4 : i === 1 ? 1.6 : 1
-          const a = drop.alpha * headBoost * (1 - i / drop.chars.length * 0.8)
-          ctx.fillStyle = i === 0
-            ? `rgba(255,210,120,${Math.min(a, 0.65)})`
-            : `rgba(247,147,26,${Math.min(a, 0.42)})`
-          ctx.fillText(drop.chars[i], drop.x, yy)
-        }
-      }
+      for (let i = 0; i < count; i++) {
+        const norm  = i / count
 
-      // ── 3. Propagation waves ─────────────────────────────────────────────────
-      waves = waves.filter(w => w.alpha > 0.008)
-      for (const w of waves) {
-        w.r = lerp(w.r, w.maxR, 0.04) + 1.2
-        w.alpha *= 0.962
-        ctx.strokeStyle = `rgba(247,147,26,${w.alpha})`
-        ctx.lineWidth = 1.5
-        ctx.shadowColor = BTC
-        ctx.shadowBlur = 10
-        ctx.beginPath()
-        ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2)
-        ctx.stroke()
-        // Inner ring
-        if (w.r > 30) {
-          ctx.strokeStyle = `rgba(247,147,26,${w.alpha * 0.4})`
-          ctx.lineWidth = 0.8
-          ctx.beginPath()
-          ctx.arc(w.x, w.y, w.r * 0.6, 0, Math.PI * 2)
-          ctx.stroke()
-        }
-        ctx.shadowBlur = 0
-      }
+        // Deterministic per-particle seeds — no allocation
+        const seed  = i * 1.6180339887
+        const seedB = i * 2.2360679774
+        const seedC = i * 0.7071067811
+        const seedD = i * 1.4142135623
 
-      // ── 5. Camera + new block spawning ───────────────────────────────────────
-      camCol += 0.003
-      blocks = blocks.filter(b => (b.col - camCol) > -Math.ceil(canvas.width / TW) - 2)
+        const fA = seed  * 7919.0 - Math.floor(seed  * 7919.0)
+        const fB = seedB * 6271.0 - Math.floor(seedB * 6271.0)
+        const fC = seedC * 4987.0 - Math.floor(seedC * 4987.0)
+        const fD = seedD * 3571.0 - Math.floor(seedD * 3571.0)
 
-      const maxCol = blocks.reduce((m, b) => Math.max(m, b.col), -Infinity)
-      if (ts - lastSpawn > 1000) {
-        baseH++
-        const nb: IsoBlock = {
-          col: maxCol + 1,
-          height: baseH,
-          hash: randHex(64),
-          birth: ts,
-          dropZ: 6,
-          fillPct: rand(0.45, 0.98),
-          txCount: Math.floor(rand(800, 4500)),
-        }
-        blocks.push(nb)
-        const [sx, sy] = iso(nb.col - camCol, 0, 1)
-        const bx = sx + ox()
-        const by = sy + oy() - DEPTH
-        spawnParticles(bx, by)
-        waves.push({ x: bx, y: by, r: 8, maxR: 220, alpha: 0.65 })
-        lastSpawn = ts
-      }
+        const layer = i % 9
 
-      // ── 6. Pending block (being mined) ───────────────────────────────────────
-      const pendingScreenCol = maxCol + 1 - camCol
-      const pendingScreenX = pendingScreenCol * (TW / 2) + ox()
-      if (pendingScreenX > 0 && pendingScreenX < canvas.width * 0.95) {
-        drawCube(
-          ctx, pendingScreenCol, 0, ox(), oy(),
-          `#${(baseH + 1).toLocaleString()}`, 'pending...',
-          0, 0.28, ts, 0, true,
+        // ── BRAIN SHAPE ───────────────────────────────────────────────────────
+        const phi    = fA * 3.1415926
+        const theta  = fB * 6.2831853
+        const sinPhi = Math.sin(phi)
+        const cosPhi = Math.cos(phi)
+        const sinTh  = Math.sin(theta)
+        const cosTh  = Math.cos(theta)
+
+        const baseR  = brainSize
+        const bx0    = baseR * 1.15 * sinPhi * cosTh
+        const by0    = baseR * 0.82 * cosPhi
+        const bz0    = baseR * 0.95 * sinPhi * sinTh
+
+        const hemi    = bx0 > 0 ? 1.0 : -1.0
+        const fissure = Math.exp(-bx0 * bx0 * 0.0012) * 5.5
+        const bx = bx0 + hemi * fissure
+        const by = by0
+        const bz = bz0
+
+        const gyriFreq = 6.0
+        const gyri = 1.8 * (
+          Math.sin(phi * gyriFreq + fC * 4.0) *
+          Math.cos(theta * gyriFreq * 0.7 + fD * 3.0)
         )
-      }
+        const nx = sinPhi * cosTh
+        const ny = cosPhi
+        const nz = sinPhi * sinTh
+        const gx = bx + nx * gyri
+        const gy = by + ny * gyri
+        const gz = bz + nz * gyri
 
-      // ── 7. Chain links ───────────────────────────────────────────────────────
-      const sorted = [...blocks].sort((a, b) => a.col - b.col)
-      for (let i = 0; i < sorted.length - 1; i++) {
-        const b1 = sorted[i]; const b2 = sorted[i + 1]
-        const screenX = (b1.col - camCol) * (TW / 2) + ox()
-        const dist = Math.abs(screenX - canvas.width / 2)
-        const alpha = dist > canvas.width * 0.68 ? 0 : 0.18
-        const isNewest = i === sorted.length - 2
-        drawLink(ctx, b1.col - camCol, 0, b2.col - camCol, 0, ox(), oy(), alpha, ts, isNewest)
-      }
-      // Link from last confirmed block to pending
-      if (sorted.length > 0) {
-        const last = sorted[sorted.length - 1]
-        const lastScreenX = (last.col - camCol) * (TW / 2) + ox()
-        const dist = Math.abs(lastScreenX - canvas.width / 2)
-        if (dist < canvas.width * 0.68) {
-          drawLink(ctx, last.col - camCol, 0, pendingScreenCol, 0, ox(), oy(), 0.10, ts, true)
+        let px = 0, py = 0, pz = 0, hue = 0, sat = 1.0, lit = 0.5
+
+        // ── LAYER 0-2 · CORTEX SHELL ─────────────────────────────────────────
+        if (layer <= 2) {
+          const jitter = 0.9 + fC * 1.2
+          const pulse  = Math.sin(t * 1.4 + fA * 9.7) * 0.5
+          px = gx + nx * (jitter + pulse)
+          py = gy + ny * (jitter + pulse)
+          pz = gz + nz * (jitter + pulse)
+          hue = 0.095 + 0.025 * Math.sin(norm * 11.0 + t * 0.3)
+          sat = 0.95
+          lit = 0.28 + 0.18 * fA + 0.12 * Math.abs(pulse)
+
+        // ── LAYER 3-4 · WHITE MATTER CIRCUITS ────────────────────────────────
+        } else if (layer <= 4) {
+          const tractIdx = Math.floor(fC * 180.0)
+          const tractAng = tractIdx * 0.03490658
+          const tractPos = fB
+          const tractRad = brainSize * (0.30 + 0.55 * tractPos)
+          const latBand  = Math.floor(fD * 9.0) * 0.3490658
+          const cosLat   = Math.cos(latBand)
+          const sinLat   = Math.sin(latBand)
+          px = tractRad * Math.cos(tractAng) * sinLat
+          py = tractRad * cosLat * (0.85 + 0.15 * Math.sin(t * 0.5 + tractIdx * 0.4))
+          pz = tractRad * Math.sin(tractAng) * sinLat
+          const flicker = Math.sin(t * 3.0 + tractPos * 6.28 + tractIdx * 1.3) * fireIntensity
+          hue = 0.08 + 0.03 * Math.sin(tractPos * 8.0 + t * 0.8)  // fix: was Mathin(
+          sat = 1.0
+          lit = 0.22 + 0.30 * tractPos + 0.28 * Math.abs(flicker)
+
+        // ── LAYER 5-6 · SIGNAL WAVEFRONTS ────────────────────────────────────
+        } else if (layer <= 6) {
+          const axonIdx   = Math.floor(fA * 60.0)
+          const axonAng   = axonIdx * 0.10471975
+          const axonLat   = Math.floor(fD * 6.0) * 0.5235987
+          const signalT   = fB + t * 0.55 + axonIdx * 0.07
+          const signalPos = signalT - Math.floor(signalT)
+          const sigR      = brainSize * (0.08 + 0.88 * signalPos)  // fix: was rainSize
+          const cosALat   = Math.cos(axonLat)
+          const sinALat   = Math.sin(axonLat)
+          px = sigR * Math.cos(axonAng) * sinALat
+          py = sigR * cosALat
+          pz = sigR * Math.sin(axonAng) * sinALat
+          const spike = Math.exp(-Math.pow((signalPos - 0.9)  * 12.0, 2.0))
+          const tail  = Math.exp(-Math.pow((signalPos - 0.85) *  4.0, 2.0)) * 0.4
+          hue = 0.07 + 0.04 * spike
+          sat = 1.0
+          lit = 0.35 + 0.55 * (spike + tail) * fireIntensity
+
+        // ── LAYER 7 · EQUATORIAL ARC RING ────────────────────────────────────
+        } else if (layer === 7) {
+          const ringAngle  = fA * 6.2831853 + t * 0.22
+          const ringTilt   = fB * 0.5 - 0.25
+          const ringR      = brainSize * (1.02 + 0.04 * Math.sin(t * 2.0 + fA * 12.0))
+          const ringSpread = 1.5 * fC - 0.75
+          px = ringR * Math.cos(ringAngle)
+          py = ringR * Math.sin(ringTilt) + ringSpread
+          pz = ringR * Math.sin(ringAngle)
+          const ringPulse = Math.sin(t * 4.0 + fA * 6.28) * 0.5 + 0.5
+          hue = 0.10 + 0.02 * ringPulse
+          sat = 1.0
+          lit = 0.50 + 0.40 * ringPulse * coreGlow
+
+        // ── LAYER 8 · MOLTEN CORE ─────────────────────────────────────────────
+        } else {
+          const coreR   = brainSize * 0.18 * (0.4 + 0.6 * fA)
+          const coreAng = fB * 6.2831853 + t * (1.5 + fC * 2.0)
+          const coreEl  = (fD - 0.5) * 1.8
+          const twist   = Math.sin(t * 2.3 + fA * 5.0) * 0.8
+          px = coreR * Math.cos(coreAng + twist)
+          py = coreR * Math.sin(coreEl) + Math.sin(t * 1.7 + fB * 4.0) * brainSize * 0.04
+          pz = coreR * Math.sin(coreAng + twist * 0.7)
+          const radNorm = coreR / (brainSize * 0.18 + 0.001)
+          hue = 0.06 + 0.06 * radNorm
+          sat = 0.90 + 0.10 * radNorm
+          lit = 0.80 - 0.45 * radNorm + 0.15 * coreGlow * Math.abs(Math.sin(t * 3.1 + fA * 7.0))
         }
+
+        // ── SLOW GLOBAL ROTATION (Y-axis) ─────────────────────────────────────
+        const rotA   = t * 0.07
+        const cosR   = Math.cos(rotA)
+        const sinR   = Math.sin(rotA)
+        const finalX = px * cosR - pz * sinR
+        const finalZ = px * sinR + pz * cosR
+
+        target.set(finalX, py, finalZ)
+        pColor.setHSL(hue, sat, Math.max(0.01, Math.min(0.99, lit)))
+
+        if (i === 0) {
+          setInfo(
+            'JARVIS Machine Brain',
+            '22,000 neural signal particles. Cortex shell · Circuit axons · Signal wavefronts · Arc ring · Molten core.',
+          )
+          annotate('center', new THREE.Vector3(0, 0, 0), 'CORE')
+        }
+
+        positions[i].lerp(target, 0.1)
+        dummy.position.copy(positions[i])
+        dummy.updateMatrix()
+        mesh.setMatrixAt(i, dummy.matrix)
+        mesh.setColorAt(i, pColor)
       }
 
-      // ── 8. Draw confirmed blocks ─────────────────────────────────────────────
-      for (const b of sorted) {
-        if (b.dropZ > 0) b.dropZ = Math.max(0, b.dropZ - 0.12)
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
 
-        const screenCol = b.col - camCol
-        const screenX = screenCol * (TW / 2) + ox()
-        const edgeFade = Math.max(0, 1 - Math.abs(screenX - canvas.width / 2) / (canvas.width * 0.55))
-        if (edgeFade < 0.01) continue
-
-        const flash = Math.max(0, 1 - (ts - b.birth) / 900)
-        const subLabel = `${b.txCount.toLocaleString()}tx  ${b.hash.slice(0, 8)}…`
-
-        drawCube(
-          ctx, screenCol, 0,
-          ox(), oy() - b.dropZ * DEPTH,
-          `#${b.height.toLocaleString()}`,
-          subLabel,
-          flash,
-          edgeFade * 0.88,
-          ts,
-          b.fillPct,
-          false,
-        )
-      }
-
-      // ── 9. Explosion particles ───────────────────────────────────────────────
-      particles = particles.filter(p => p.life > 0)
-      for (const p of particles) {
-        p.x += p.vx; p.y += p.vy; p.vy += 0.055; p.life -= 0.02
-        ctx.globalAlpha = p.life * 0.85
-        ctx.fillStyle = BTC
-        ctx.shadowColor = BTC; ctx.shadowBlur = 6
-        ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fill()
-        ctx.shadowBlur = 0
-      }
-      ctx.globalAlpha = 1
-
-      animId = requestAnimationFrame(draw)
+      composer.render()
     }
 
-    animId = requestAnimationFrame(draw)
-    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize) }
+    animate()
+
+    // ── RESIZE ─────────────────────────────────────────────────────────────────
+    const onResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+      composer.setSize(window.innerWidth, window.innerHeight)
+    }
+    window.addEventListener('resize', onResize)
+
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('resize', onResize)
+      geometry.dispose()
+      material.dispose()
+      renderer.dispose()
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
+    }
   }, [])
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={mountRef}
       style={{
-        position: 'fixed', top: 0, left: 0,
-        width: '100%', height: '100%',
+        position: 'fixed', inset: 0,
+        width: '100vw', height: '100vh',
         zIndex: 0, pointerEvents: 'none',
-        opacity: 0.7,
+        overflow: 'hidden',
+        opacity: 0.1,
       }}
     />
   )
