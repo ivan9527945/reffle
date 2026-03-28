@@ -8,6 +8,7 @@ import { Badge } from './ui/badge'
 import { fetchCurrentHeight } from '../lib/bitcoin'
 import { formatBlockETA } from '../lib/utils'
 import { useToast } from './Toast'
+import { useLocale } from '../i18n'
 
 interface SetupViewProps {
   onLock: (title: string, participants: string[], targetBlock: number, startBlock: number) => void
@@ -17,22 +18,25 @@ interface SetupViewProps {
 
 export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewProps) {
   const { show } = useToast()
-  const [title, setTitle] = useState('')
-  const [nameInput, setNameInput] = useState('')
-  const [batchInput, setBatchInput] = useState('')
+  const { t } = useLocale()
+
+  const [title, setTitle]             = useState('')
+  const [nameInput, setNameInput]     = useState('')
+  const [batchInput, setBatchInput]   = useState('')
   const [participants, setParticipants] = useState<string[]>([])
   const [targetBlock, setTargetBlock] = useState<string>('')
-  const [blockETA, setBlockETA] = useState<{ text: string; valid: boolean } | null>(null)
-  const [locking, setLocking] = useState(false)
+  // Store raw blockETA data; display text is derived on render so locale changes auto-update it
+  const [blockETA, setBlockETA]       = useState<{ left: number; valid: boolean } | null>(null)
+  const [locking, setLocking]         = useState(false)
 
-  // ── Participants
+  // ── Participants ───────────────────────────────────────────────────────────
   const addOne = useCallback(() => {
     const name = nameInput.trim()
     if (!name) return
-    if (participants.includes(name)) { show(`"${name}" 已在名單中`); return }
+    if (participants.includes(name)) { show(t('toast.alreadyInList', { name })); return }
     setParticipants(p => [...p, name])
     setNameInput('')
-  }, [nameInput, participants, show])
+  }, [nameInput, participants, show, t])
 
   const addBatch = useCallback(() => {
     const names = batchInput
@@ -41,8 +45,8 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
       .filter(n => n.length > 0 && !participants.includes(n))
     setParticipants(p => [...p, ...names])
     setBatchInput('')
-    show(`已加入 ${names.length} 人`)
-  }, [batchInput, participants, show])
+    show(t('toast.added', { count: names.length }))
+  }, [batchInput, participants, show, t])
 
   const remove = useCallback((i: number) => {
     setParticipants(p => p.filter((_, idx) => idx !== i))
@@ -52,15 +56,14 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
     if (e.key === 'Enter') addOne()
   }
 
-  // ── Block ETA
+  // ── Block ETA ──────────────────────────────────────────────────────────────
   const updateETA = useCallback((val: string, height: number | null) => {
     const n = parseInt(val)
     if (!n || !height) { setBlockETA(null); return }
     if (n <= height) {
-      setBlockETA({ text: '⚠️ 此區塊已出礦，請選擇更高的區塊', valid: false })
+      setBlockETA({ left: 0, valid: false })
     } else {
-      const left = n - height
-      setBlockETA({ text: `⏱ ${left} 個區塊後開獎，預計 ${formatBlockETA(left)} 後`, valid: true })
+      setBlockETA({ left: n - height, valid: true })
     }
   }, [])
 
@@ -71,31 +74,34 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
 
   const suggestBlock = async () => {
     const h = await onHeightRefresh()
-    if (!h) { show('無法連線到比特幣網路'); return }
+    if (!h) { show(t('toast.noConnection')); return }
     const suggested = String(h + 1)
     setTargetBlock(suggested)
     updateETA(suggested, h)
   }
 
-  // ── Lock
-  const canLock =
-    title.trim().length > 0 &&
-    participants.length >= 2 &&
-    blockETA?.valid === true
+  // ── Lock ───────────────────────────────────────────────────────────────────
+  const canLock = title.trim().length > 0 && participants.length >= 2 && blockETA?.valid === true
 
   const handleLock = async () => {
     setLocking(true)
     try {
       const h = await fetchCurrentHeight()
       const target = parseInt(targetBlock)
-      if (target <= h) { show('目標區塊已出礦，請重新選擇'); return }
+      if (target <= h) { show(t('toast.blockMined')); return }
       onLock(title.trim(), participants, target, h)
     } catch {
-      show('無法連線到比特幣網路')
+      show(t('toast.noConnection'))
     } finally {
       setLocking(false)
     }
   }
+
+  const fairPoints = [
+    { icon: '🎲', titleKey: 'setup.whyFair.unpredictable.title', bodyKey: 'setup.whyFair.unpredictable.body' },
+    { icon: '🔍', titleKey: 'setup.whyFair.verifiable.title',    bodyKey: 'setup.whyFair.verifiable.body' },
+    { icon: '🚫', titleKey: 'setup.whyFair.tamperProof.title',   bodyKey: 'setup.whyFair.tamperProof.body' },
+  ]
 
   return (
     <div className="animate-fade-in">
@@ -103,19 +109,19 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
       <div className="text-center mb-12">
         <div className="text-6xl mb-5 animate-float inline-block">⛏️</div>
         <h1 className="text-3xl sm:text-4xl font-black mb-3">
-          公平抽獎，<span className="text-btc">由比特幣決定</span>
+          {t('setup.hero.titleStart')}<span className="text-btc">{t('setup.hero.titleHighlight')}</span>
         </h1>
         <p className="text-muted-foreground mx-auto leading-relaxed text-[15px] whitespace-nowrap overflow-hidden text-ellipsis">
-          指定未來一個比特幣區塊，當礦工出礦時，用區塊 hash 決定得獎者。結果完全公開、可驗證，任何人都能自行計算確認。
+          {t('setup.hero.desc')}
         </p>
       </div>
 
       {/* How it works */}
       <div className="flex flex-wrap gap-3 justify-center mb-10">
-        {['📝 輸入參與名單', '🔗 等待出礦', '🏆 Hash 決定贏家'].map((s, i, arr) => (
-          <div key={s} className="flex items-center gap-3">
-            <Badge>{s}</Badge>
-            {i < arr.length - 1 && <span className="text-muted-foreground text-sm">→</span>}
+        {([0, 1, 2] as const).map((idx) => (
+          <div key={idx} className="flex items-center gap-3">
+            <Badge>{t(`setup.steps.${idx}`)}</Badge>
+            {idx < 2 && <span className="text-muted-foreground text-sm">→</span>}
           </div>
         ))}
       </div>
@@ -126,25 +132,25 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
 
           {/* Title */}
           <div>
-            <label className="label-caps block mb-2">抽獎名稱</label>
+            <label className="label-caps block mb-2">{t('setup.raffleName')}</label>
             <Input
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder="例：2024 年度員工抽獎"
+              placeholder={t('setup.raffleNamePlaceholder')}
             />
           </div>
 
           {/* Participants */}
           <div>
             <label className="label-caps block mb-2">
-              參與者名單{' '}
-              <span className="text-btc">（{participants.length} 人）</span>
+              {t('setup.participants')}{' '}
+              <span className="text-btc">{t('setup.participantCount', { count: participants.length })}</span>
             </label>
 
             <Tabs defaultValue="single">
               <TabsList>
-                <TabsTrigger value="single">逐一輸入</TabsTrigger>
-                <TabsTrigger value="batch">批量貼上</TabsTrigger>
+                <TabsTrigger value="single">{t('setup.addOne')}</TabsTrigger>
+                <TabsTrigger value="batch">{t('setup.batchPaste')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="single">
@@ -153,9 +159,9 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
                     value={nameInput}
                     onChange={e => setNameInput(e.target.value)}
                     onKeyDown={handleNameKey}
-                    placeholder="輸入名字後按 Enter 或點加入"
+                    placeholder={t('setup.namePlaceholder')}
                   />
-                  <Button onClick={addOne} className="shrink-0">加入</Button>
+                  <Button onClick={addOne} className="shrink-0">{t('setup.add')}</Button>
                 </div>
               </TabsContent>
 
@@ -165,10 +171,10 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
                   rows={5}
                   value={batchInput}
                   onChange={e => setBatchInput(e.target.value)}
-                  placeholder={'每行一個名字，或用逗號分隔：\nAlice\nBob\nCharlie\n\n或：Alice, Bob, Charlie'}
+                  placeholder={t('setup.batchPlaceholder')}
                 />
                 <Button variant="outline" size="sm" onClick={addBatch} className="mt-2">
-                  匯入名單
+                  {t('setup.importList')}
                 </Button>
               </TabsContent>
             </Tabs>
@@ -176,7 +182,7 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
             {/* Chips */}
             <div className="flex flex-wrap gap-2 mt-4 min-h-[40px]">
               {participants.length === 0 ? (
-                <span className="text-muted-foreground text-sm">尚未加入任何參與者</span>
+                <span className="text-muted-foreground text-sm">{t('setup.noParticipants')}</span>
               ) : (
                 participants.map((name, i) => (
                   <div key={i} className="chip">
@@ -191,29 +197,31 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
 
           {/* Target block */}
           <div>
-            <label className="label-caps block mb-2">開獎區塊高度</label>
+            <label className="label-caps block mb-2">{t('setup.targetBlock')}</label>
             <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 type="number"
                 className="mono flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={targetBlock}
                 onChange={e => handleBlockInput(e.target.value)}
-                placeholder="輸入區塊高度..."
+                placeholder={t('setup.blockPlaceholder')}
               />
               <Button variant="outline" onClick={suggestBlock} className="shrink-0 sm:w-auto w-full">
-                推薦下一個 ⚡
+                {t('setup.suggestNext')}
               </Button>
             </div>
             {blockETA && (
               <p className={`text-sm mt-2 ${blockETA.valid ? 'text-btc' : 'text-destructive'}`}>
-                {blockETA.text}
+                {blockETA.valid
+                  ? t('setup.blockETA', { left: blockETA.left, eta: formatBlockETA(blockETA.left) })
+                  : t('setup.blockMinedWarning')}
               </p>
             )}
             <p className="text-muted-foreground text-xs mt-2 flex items-center gap-1">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
               </svg>
-              比特幣平均每 10 分鐘出一個區塊。建議選未來 6 個以上確保安全。
+              {t('setup.btcInfo')}
             </p>
           </div>
 
@@ -224,7 +232,7 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
             disabled={!canLock || locking}
             onClick={handleLock}
           >
-            {locking ? '連線中...' : '🔒 鎖定名單，開始等待出礦'}
+            {locking ? t('setup.connecting') : t('setup.lockBtn')}
           </Button>
         </CardContent>
       </Card>
@@ -232,43 +240,40 @@ export function SetupView({ onLock, currentHeight, onHeightRefresh }: SetupViewP
       {/* Why fair */}
       <Card>
         <CardHeader>
-          <CardTitle>⚙️ 為什麼這樣設計是公平的？</CardTitle>
+          <CardTitle>{t('setup.whyFair.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid sm:grid-cols-3 gap-5 mb-6">
-            {[
-              {
-                icon: '🎲',
-                title: '無法預測',
-                body: '比特幣區塊 hash 由全球礦工競爭產出，任何人（包含主辦方）都無法提前知道結果。',
-              },
-              {
-                icon: '🔍',
-                title: '可公開驗證',
-                body: '任何人都可以在 mempool.space 查到區塊 hash，自行計算 hash mod 人數確認結果正確。',
-              },
-              {
-                icon: '🚫',
-                title: '不可竄改',
-                body: '名單鎖定後不可更動，配合區塊 hash，主辦方無法干預或造假結果。',
-              },
-            ].map(item => (
-              <div key={item.title}>
-                <div className="font-semibold text-sm mb-1.5">{item.icon} {item.title}</div>
-                <div className="text-muted-foreground text-[13px] leading-relaxed">{item.body}</div>
+            {fairPoints.map(item => (
+              <div key={item.titleKey}>
+                <div className="font-semibold text-sm mb-1.5">{item.icon} {t(item.titleKey)}</div>
+                <div className="text-muted-foreground text-[13px] leading-relaxed">{t(item.bodyKey)}</div>
               </div>
             ))}
           </div>
 
           {/* Formula */}
           <div className="border-t pt-5">
-            <p className="label-caps mb-3">📐 開獎計算公式</p>
+            <p className="label-caps mb-3">{t('setup.formula.title')}</p>
             <div className="code-block text-sm space-y-1.5">
-              <div className="text-muted-foreground text-xs mb-2">出礦後，任何人都可以用以下公式自行驗算：</div>
-              <div><span className="text-btc">① 取得 hash</span>  → 至 mempool.space 查詢指定區塊的 Block Hash</div>
-              <div><span className="text-btc">② 轉為數字</span>  → <span className="mono">BigInt("0x" + blockHash)</span></div>
-              <div><span className="text-btc">③ 取餘數</span>   → <span className="mono">% BigInt(人數)</span>{' '}← 得到名單索引 (0-based)</div>
-              <div><span className="text-btc">④ 對應得獎者</span> → <span className="mono">participants[索引]</span></div>
+              <div className="text-muted-foreground text-xs mb-2">{t('setup.formula.desc')}</div>
+              <div>
+                <span className="text-btc">{t('setup.formula.step1.label')}</span>
+                {'  '}{t('setup.formula.step1.desc')}
+              </div>
+              <div>
+                <span className="text-btc">{t('setup.formula.step2.label')}</span>
+                {'  '}→ <span className="mono">BigInt("0x" + blockHash)</span>
+              </div>
+              <div>
+                <span className="text-btc">{t('setup.formula.step3.label')}</span>
+                {'   '}→ <span className="mono">% BigInt({t('setup.formula.countVar')})</span>
+                {' '}{t('setup.formula.step3.suffix')}
+              </div>
+              <div>
+                <span className="text-btc">{t('setup.formula.step4.label')}</span>
+                {' '}→ <span className="mono">participants[{t('setup.formula.indexVar')}]</span>
+              </div>
             </div>
           </div>
         </CardContent>

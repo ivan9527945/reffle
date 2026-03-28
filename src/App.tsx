@@ -7,6 +7,7 @@ import { Toast } from './components/Toast'
 import { CryptoBackground } from './components/CryptoBackground'
 import { useRaffle } from './hooks/useRaffle'
 import { useCurrentHeight } from './hooks/useBitcoin'
+import { LocaleProvider } from './i18n'
 import './styles/globals.scss'
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
   }, [poll])
 
   return (
+    <LocaleProvider>
     <div style={{ position: 'relative', zIndex: 1 }}>
       <CryptoBackground />
 
@@ -47,5 +49,6 @@ export default function App() {
 
       <Toast />
     </div>
+    </LocaleProvider>
   )
 }
