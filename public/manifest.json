@@ -1,5 +1,5 @@
 {
-  "name": "BTC Raffle — 比特幣區塊公平抽獎",
+  "name": "BTC Raffle",
   "short_name": "BTC Raffle",
   "description": "利用比特幣區塊雜湊值進行可公開驗證的公平抽獎",
   "start_url": "/",
